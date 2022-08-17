@@ -1,0 +1,39 @@
+extends layout
+
+block content
+  h4 #{schedule.scheduleName}
+  p(style="white-space:pre;") #{schedule.memo}
+  p 作成者: #{schedule.user.username}
+  h3 出欠表
+  table
+    tr
+      th 予定
+      each user in users
+        th #{user.username}
+    each candidate in candidates
+      tr
+        th #{candidate.candidateName}
+        each user in users
+          - var availability = availabilityMapMap.get(user.userId).get(candidate.candidateId)
+          - var availabilityLabels = ['欠', '？', '出'];
+          td
+            if user.isSelf
+              button(
+                data-schedule-id=schedule.scheduleId
+                data-user-id=user.userId
+                data-candidate-id=candidate.candidateId
+                data-availability=availability).availability-toggle-button #{availabilityLabels[availability]}
+            else
+              p #{availabilityLabels[availability]}
+    tr
+      th コメント
+      each user in users
+        if user.isSelf
+          td
+            p#self-comment #{commentMap.get(user.userId)}
+            button(
+              data-schedule-id=schedule.scheduleId
+              data-user-id=user.userId)#self-comment-button 編集
+        else
+          td
+            p #{commentMap.get(user.userId)}
