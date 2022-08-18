@@ -16,20 +16,14 @@ router.get('/new', authenticationEnsurer, (req, res, next) => {
 router.post('/', authenticationEnsurer, async (req, res, next) => {
   const scheduleId = uuidv4();
   const updatedAt = new Date();
-  const schedule = await Schedule.create({
+  await Schedule.create({
     scheduleId: scheduleId,
     scheduleName: req.body.scheduleName.slice(0, 255) || '（名称未設定）',
     memo: req.body.memo,
     createdBy: req.user.id,
     updatedAt: updatedAt
   });
-  const candidateNames = req.body.candidates.trim().split('\n').map((s) => s.trim()).filter((s) => s !== "");
-  const candidates = candidateNames.map((c) => { return {
-    candidateName: c,
-    scheduleId: schedule.scheduleId
-  };});
-  await Candidate.bulkCreate(candidates);
-  res.redirect('/schedules/' + schedule.scheduleId);
+  createCandidatesAndRedirect(parseCandidateNames(req), scheduleId, res);
 });
 
 router.get('/:scheduleId', authenticationEnsurer, async (req, res, next) => {
@@ -153,6 +147,78 @@ router.get('/:scheduleId/edit', authenticationEnsurer, async(req, res, next) => 
 //リクエストと予定オブジェクトを受け取り、その予定が自分自身のものかを判定し、真偽値を返す
 function isMine(req, schedule) {
   return schedule && parseInt(schedule.createdBy) === parseInt(req.user.id);
+}
+
+router.post('/:scheduleId', authenticationEnsurer, async(req, res, next) => {
+  
+  //予定IDをもとに、予定データをデータベースから取得
+  let schedule = await Schedule.findOne({
+    where: {
+      scheduleId: req.params.scheduleId
+    }
+  });
+
+  if(schedule && isMine(req, schedule)) {  //リクエストの送信者が作成者であるかをチェック
+    if(parseInt(req.query.edit) === 1) {  //URLのクエリにedit=1がある時のみ更新（更新は予定名、メモ、作成者、更新日時）
+      
+      const updatedAt = new Date();  //日付を取得
+
+      //予定データを更新（updateはSQLのUPDATE文に対応）
+      schedule = await schedule.update({
+        scheduleId: schedule.scheduleId,
+        scheduleName: req.body.scheduleName.slice(0, 255) || '(名称未設定)',
+        memo: req.body.memo,
+        createdBy: req.user.id,
+        updatedAt: updatedAt
+      });
+
+      //リクエストから候補日程の配列をパースする関数をparseCandidateNamesを呼び出す
+      const candidateNames = parseCandidateNames(req);
+
+      //追加の候補日程があるかどうかによって処理を切り分ける
+      /* 
+        追加候補があるかどうかによって 
+        ●createCandidatesAndRedirect関数を呼んで、 候補を追加してリダイレクトする
+        ●何もせずにそのままリダイレクトする
+        となるように、if文で分岐 
+      */
+      if (candidateNames) {
+        createCandidatesAndRedirect(candidateNames, schedule.scheduleId, res);
+      } else {
+        res.redirect('/schedules/' + schedule.scheduleId);
+      }
+    } else {
+
+      //edit=1 以外のクエリが渡された際は400BadRequestを返す
+      const err = new Error('不正なリクエストです');
+      err.status = 400;
+      next(err);
+    }
+  } else {
+
+    //予定が見つからない場合や、自分自身の予定ではない場合は、 404NotFoundを返す
+    const err = new Error('指定された予定がない、または、編集する権限がありません');
+    err.status = 404;
+    next(err);
+  }
+});
+
+
+//候補日程の配列、予定ID、レスポンスオブジェクトを受け取り、候補の作成とリダイレクトを行う関数
+async function createCandidatesAndRedirect(candidateNames, scheduleId, res) {
+  const candidates = candidateNames.map((c) => {
+    return {
+      candidateName: c,
+      scheduleId: scheduleId
+    };
+  });
+  await Candidate.bulkCreate(candidates)  //bulkCreate...SequelizeにおけるBulkInsert（複数のデータを一気に挿入する）のこと
+  res.redirect('/schedules/' + scheduleId);
+}
+
+//予定名の配列をパースする関数
+function parseCandidateNames(req) {
+  return req.body.candidates.trim().split('\n').map((s) => s.trim()).filter((s) => s !=="");
 }
 
 module.exports = router;
