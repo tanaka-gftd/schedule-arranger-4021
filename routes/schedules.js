@@ -187,6 +187,11 @@ router.post('/:scheduleId', authenticationEnsurer, async(req, res, next) => {
       } else {
         res.redirect('/schedules/' + schedule.scheduleId);
       }
+
+    } else if (parseInt(req.query.delete) === 1) {
+      await deleteScheduleAggregate(req.params.scheduleId);
+      res.redirect('/');
+      
     } else {
 
       //edit=1 以外のクエリが渡された際は400BadRequestを返す
@@ -203,6 +208,33 @@ router.post('/:scheduleId', authenticationEnsurer, async(req, res, next) => {
   }
 });
 
+//予定を削除
+//DBからスケジュールIDをもとに予定を取り出し、デストロイする（awaitで削除が終わるのを待つ）
+async function deleteScheduleAggregate(scheduleId) {
+
+  const comments = await Comment.findAll({
+    where: { scheduleId: scheduleId}
+  });
+  const promisesCommentDestroy = comments.map((c) => { return c.destroy(); });
+  await Promise.all(promisesCommentDestroy);
+
+  const availabilities = await Availability.findAll({
+    where: { scheduleId: scheduleId }
+  });
+  const promiseAvailabilityDestroy = availabilities.map((a) => { return a.destroy(); });
+  await Promise.all(promiseAvailabilityDestroy);
+
+  const candidates = await Candidate.findAll({
+    where: { scheduleId: scheduleId }
+  });
+  const promisesCandidateDestroy = candidates.map((c) => {  return c.destroy(); })
+  await Promise.all(promisesCandidateDestroy);
+  
+  const s = await Schedule.findByPk(scheduleId);
+  await s.destroy();
+}
+
+router.deleteScheduleAggregate = deleteScheduleAggregate;
 
 //候補日程の配列、予定ID、レスポンスオブジェクトを受け取り、候補の作成とリダイレクトを行う関数
 async function createCandidatesAndRedirect(candidateNames, scheduleId, res) {

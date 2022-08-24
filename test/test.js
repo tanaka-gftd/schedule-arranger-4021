@@ -7,6 +7,7 @@ const Schedule = require('../models/schedule');
 const Candidate = require('../models/candidate');
 const Availability = require('../models/availability');
 const Comment = require('../models/comment');
+const deleteScheduleAggregate = require('../routes/schedules').deleteScheduleAggregate;
 
 describe('/login', () => {
   beforeAll(() => {
@@ -202,7 +203,7 @@ describe('/schedules/:scheduleId?edit=1', () => {
   });
 });
 
-async function deleteScheduleAggregate(scheduleId) {
+/* async function deleteScheduleAggregate(scheduleId) {
   const comments = await Comment.findAll({
     where: { scheduleId: scheduleId }
   });
@@ -221,4 +222,4 @@ async function deleteScheduleAggregate(scheduleId) {
   await Promise.all(promisesCandidateDestroy);
   const s = await Schedule.findByPk(scheduleId);
   await s.destroy();
-}
+} */
